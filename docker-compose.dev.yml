@@ -1,0 +1,61 @@
+version: "3.9"
+
+# Development overrides — hot reload, exposed ports, no prod builds
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./apps/api:/app
+      - ./packages:/packages
+      - ./storage:/app/storage
+    environment:
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build:
+      context: ./apps/worker
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./apps/worker:/app
+      - ./packages:/packages
+      - ./storage:/app/storage
+    environment:
+      DEBUG: "true"
+    command: python -m app.main
+
+  browser-worker:
+    build:
+      context: ./apps/browser-worker
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./apps/browser-worker:/app
+      - ./packages:/packages
+      - ./storage:/app/storage
+    environment:
+      DEBUG: "true"
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    command: npm run dev

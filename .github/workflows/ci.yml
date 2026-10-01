@@ -1,0 +1,98 @@
+name: CareerOS CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  # ── Backend (Python/FastAPI) ──────────────────────────────────────────────
+  api-test:
+    name: API Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt aiosqlite
+
+      - name: Lint (ruff)
+        run: pip install ruff && ruff check app/ tests/ || true
+
+      - name: Type check (mypy)
+        run: pip install mypy && mypy app/ || true
+
+      - name: Run tests with coverage
+        run: pytest tests/ -v --tb=short --cov=app --cov-report=xml --cov-fail-under=70
+        env:
+          ENVIRONMENT: test
+          API_SECRET_KEY: ci-test-secret-key
+          JWT_SECRET: ci-test-jwt-secret
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: apps/api/coverage.xml
+          flags: api
+        continue-on-error: true
+
+  # ── Frontend (Next.js) ───────────────────────────────────────────────────
+  web-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run build 2>&1
+
+      - name: Lint
+        run: npm run lint || true
+
+  # ── Security scan ────────────────────────────────────────────────────────
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Run safety check on API deps
+        run: |
+          pip install safety
+          safety scan -r apps/api/requirements.txt || true
+
+      - name: Run pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit -r apps/api/requirements.txt || true

@@ -4,60 +4,98 @@
 
 ---
 
-## Current Phase: PHASE 0 — FOUNDATION (Complete)
+## Current Phase: PHASE 1 — CANDIDATE INTELLIGENCE (Complete)
 
 ---
 
 ## What Is Built
 
-### Infrastructure
-- [x] Monorepo structure (`apps/`, `packages/`, `adapters/`, `docs/`, `infra/`, `scripts/`, `tests/`)
-- [x] `.env.example` with all configuration placeholders
-- [x] `.gitignore`
-- [x] `docker-compose.yml` (production)
-- [x] `docker-compose.dev.yml` (development with hot reload)
-- [x] PostgreSQL init script with extensions (uuid-ossp, pgcrypto, vector)
+### Phase 0 — Foundation ✅
+- [x] Monorepo structure, `.env.example`, `.gitignore`
+- [x] Docker Compose (production + development)
+- [x] PostgreSQL init with uuid-ossp, pgcrypto, vector extensions
 - [x] GitHub Actions CI (API tests, frontend build, security scan)
-
-### Backend (FastAPI)
-- [x] FastAPI application (`apps/api/`)
-- [x] Core configuration (pydantic-settings, environment-driven)
-- [x] Structured logging (structlog, JSON in production, pretty in dev)
-- [x] Observability middleware (correlation IDs, request IDs, Prometheus metrics)
-- [x] CORS middleware
-- [x] Database session management (async SQLAlchemy 2.0)
+- [x] FastAPI application with CORS, correlation IDs, Prometheus metrics
+- [x] JWT authentication (access + refresh tokens, bcrypt)
+- [x] User + UserSession ORM models
 - [x] Alembic migration setup
-- [x] JWT authentication (access + refresh tokens)
-- [x] Password hashing (bcrypt direct)
-- [x] Auth endpoints: register, login, /me
-- [x] User model with soft delete
-- [x] UserSession model
-- [x] Health endpoint (`/health`)
-- [x] Readiness endpoint (`/ready`)
-- [x] Prometheus metrics endpoint (`/metrics`)
-- [x] Candidate endpoints (skeleton, Phase 1)
-- [x] Jobs endpoints (skeleton, Phase 2)
-- [x] Dockerfiles (production + dev)
-- [x] Virtual environment with all dependencies
+- [x] Next.js 14 frontend with dashboard layout
+- [x] Health `/health`, readiness `/ready`, metrics `/metrics` endpoints
+- [x] 22 tests, 71.93% coverage
 
-### Frontend (Next.js 14)
-- [x] Next.js 14 app router setup (`apps/web/`)
-- [x] TypeScript + Tailwind CSS
-- [x] Dashboard layout with sidebar navigation
-- [x] Dashboard page with stat cards and phase progress
-- [x] Accessible markup (ARIA labels, semantic HTML, focus rings)
-- [x] All pages linked (Jobs, Applications, Profile, Resumes, Approvals, Policies, Audit, Health)
+### Phase 1 — Candidate Intelligence ✅
 
-### Testing
-- [x] 22 tests passing (unit + integration)
-- [x] 71.93% coverage (above 70% threshold)
-- [x] Test fixtures with in-memory SQLite (no external dependencies needed)
-- [x] Security tests: password hashing, JWT tokens, tampered tokens
-- [x] API tests: registration, login, auth, duplicate detection, validation
+#### Domain Layer
+- [x] `EvidenceStrength` enum: VERIFIED / STRONG / MODERATE / WEAK / UNKNOWN
+- [x] `FactCategory` enum: skill, experience, education, project, certification, achievement, technology, responsibility, language, publication, volunteer
+- [x] `EvidenceSourceType` enum: resume, work_history, project, git_repository, portfolio, certificate, uploaded_document, user_confirmation, linkedin, github, external_link
+- [x] Evidence validation rules (deterministic, no LLM)
+- [x] `validate_evidence()` — returns strength + errors + warnings
+- [x] `can_claim_be_used()` — enforces truth policy
+- [x] `requires_human_review()` — flags weak evidence
+- [x] `classify_gap()` — skill_gap vs representation_gap
+- [x] `_aggregate_strength()` — strongest-evidence wins
 
-### Documentation
-- [x] `docs/PROJECT_STATE.md` (this file)
-- [x] Architecture documents (see docs/)
+#### ORM Models
+- [x] `CandidateProfile` — identity, contact, location, preferences, authorization
+- [x] `Education` — institution, degree, field, dates, GPA
+- [x] `Experience` — company, title, dates, duration_months computed
+- [x] `Skill` — name, category, proficiency, unique per candidate
+- [x] `Project` — name, description, URLs, technologies
+- [x] `Certification` — name, issuer, dates, credential URL
+- [x] `Achievement` — title, description, issuer, date
+- [x] `CandidateFact` — claim, category, evidence_strength aggregate
+- [x] `Evidence` — source_type, source_reference, strength, status
+
+#### Alembic Migration
+- [x] `0001_initial_schema.py` — all 11 tables with indexes, FKs, constraints
+
+#### Pydantic Schemas
+- [x] Create/Update/Response schemas for all 9 entities
+- [x] `CandidateProfileFull` — nested full profile response
+- [x] `CandidateFactCreate` — fact + evidence in one request
+- [x] Salary fields excluded from default response (privacy)
+
+#### Service Layer
+- [x] Profile CRUD (create, get by user, full load with eager joins, update)
+- [x] Education, Experience, Skill, Project, Certification, Achievement CRUD
+- [x] `create_fact()` — creates fact + evidence, computes aggregate strength
+- [x] `add_evidence_to_fact()` — recomputes aggregate on each addition
+- [x] Soft delete for all entities
+- [x] Duration months computed automatically for Experience
+
+#### API Endpoints (31 routes)
+- [x] `POST/GET/PUT /candidates/profile` — profile management
+- [x] `GET /candidates/profile/full` — nested full profile
+- [x] `POST/GET/PUT/DELETE /candidates/education/{id}` — 4 routes
+- [x] `POST/GET/PUT/DELETE /candidates/experiences/{id}` — 4 routes
+- [x] `POST/GET/DELETE /candidates/skills/{id}` — 3 routes
+- [x] `POST/GET/PUT/DELETE /candidates/projects/{id}` — 4 routes
+- [x] `POST/GET/DELETE /candidates/certifications/{id}` — 3 routes
+- [x] `POST/GET/DELETE /candidates/achievements/{id}` — 3 routes
+- [x] `POST/GET /candidates/facts` + `GET/POST /candidates/facts/{id}` + `POST /candidates/facts/{id}/evidence` — 5 routes
+
+#### Security
+- [x] All candidate routes require authentication
+- [x] Resource scoped to owning user — cross-user access returns 404
+- [x] Duplicate profile returns 409
+- [x] Duplicate skill returns 409
+
+#### Tests
+- [x] 35 unit tests — evidence domain logic (all cases)
+- [x] 34 integration tests — all candidate API endpoints
+- [x] Cross-user isolation tested
+- [x] Truth policy enforced: UNKNOWN facts created correctly
+- [x] Evidence strength upgrade on adding evidence tested
+- [x] **91 total tests, 75.14% coverage**
+
+#### Frontend (Phase 1)
+- [x] Profile page with identity, skills with evidence badges, evidence facts
+- [x] EvidenceBadge component showing strength visually
+- [x] Truth policy warning banner for UNKNOWN facts
+- [x] Jobs page skeleton (Phase 2 placeholder)
+- [x] Applications page skeleton (Phase 5 placeholder)
+- [x] API client utility (`lib/api.ts`)
 
 ---
 
@@ -65,7 +103,6 @@
 
 | Phase | Status |
 |-------|--------|
-| Phase 1: Candidate Intelligence | Pending |
 | Phase 2: Job Intelligence | Pending |
 | Phase 3: Matching Engine | Pending |
 | Phase 4: Resume Engine | Pending |
@@ -79,24 +116,12 @@
 
 ---
 
-## Known Limitations (Phase 0)
+## Phase 1 Definition of Done ✅
 
-1. Database migrations not yet run (no real PostgreSQL configured — tests use SQLite)
-2. Frontend pages are skeletons (stat data is static placeholders)
-3. Worker and browser-worker apps are empty skeletons
-4. pgvector not yet used (will be in Phase 3)
-5. Model router not yet implemented (will be in Phase 2/3)
-6. Policy engine not yet implemented (Phase 6)
-
----
-
-## Phase 0 Definition of Done
-
-- [x] Services can start
-- [x] Migrations are configured (Alembic env.py ready)
-- [x] Health endpoint works
-- [x] Frontend loads and builds
-- [x] Backend tests pass (22/22)
-- [x] CI workflow created
-- [x] No secrets committed
-- [x] Coverage ≥ 70%
+- [x] Candidate can be fully represented with verified structured evidence
+- [x] Evidence graph enforces truth policy (UNKNOWN ≠ usable)
+- [x] All sub-resources (education, experience, skills, projects, certs, achievements) persist and are retrievable
+- [x] Cross-user isolation enforced
+- [x] 91 tests passing, 75.14% coverage (≥70% threshold)
+- [x] Frontend profile page renders evidence strength visually
+- [x] Alembic migration ready for real PostgreSQL deployment

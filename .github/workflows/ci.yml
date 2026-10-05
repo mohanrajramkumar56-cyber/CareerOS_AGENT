@@ -7,7 +7,7 @@ on:
     branches: [main, master, develop]
 
 jobs:
-  # ── Backend (Python/FastAPI) ──────────────────────────────────────────────
+  # ── Backend tests ─────────────────────────────────────────────────────────
   api-test:
     name: API Tests
     runs-on: ubuntu-latest
@@ -35,11 +35,12 @@ jobs:
         run: pip install mypy && mypy app/ || true
 
       - name: Run tests with coverage
-        run: pytest tests/ -v --tb=short --cov=app --cov-report=xml --cov-fail-under=70
+        run: pytest tests/ -q --tb=short --cov=app --cov-report=xml --cov-fail-under=70
         env:
           ENVIRONMENT: test
           API_SECRET_KEY: ci-test-secret-key
           JWT_SECRET: ci-test-jwt-secret
+          SECRET_KEY: ci-test-secret-key
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -48,7 +49,7 @@ jobs:
           flags: api
         continue-on-error: true
 
-  # ── Frontend (Next.js) ───────────────────────────────────────────────────
+  # ── Frontend build ────────────────────────────────────────────────────────
   web-build:
     name: Frontend Build
     runs-on: ubuntu-latest
@@ -69,13 +70,48 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Type check
-        run: npm run build 2>&1
+      - name: Type check + build
+        run: npm run build
 
       - name: Lint
         run: npm run lint || true
 
-  # ── Security scan ────────────────────────────────────────────────────────
+  # ── Docker builds ─────────────────────────────────────────────────────────
+  docker-build-api:
+    name: Docker — API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -t careeros/api:ci -f apps/api/Dockerfile apps/api
+
+  docker-build-worker:
+    name: Docker — Worker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Worker image
+        run: docker build -t careeros/worker:ci -f apps/worker/Dockerfile .
+
+  docker-build-browser-worker:
+    name: Docker — Browser Worker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Browser Worker image
+        # Browser worker is large — allow up to 20 min
+        timeout-minutes: 20
+        run: docker build -t careeros/browser-worker:ci -f apps/browser-worker/Dockerfile .
+
+  docker-build-web:
+    name: Docker — Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Web image
+        run: docker build -t careeros/web:ci -f apps/web/Dockerfile apps/web
+
+  # ── Security scan ─────────────────────────────────────────────────────────
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -87,12 +123,13 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Run safety check on API deps
-        run: |
-          pip install safety
-          safety scan -r apps/api/requirements.txt || true
-
-      - name: Run pip-audit
+      - name: Run pip-audit on API deps
         run: |
           pip install pip-audit
           pip-audit -r apps/api/requirements.txt || true
+
+      - name: Run pip-audit on worker deps
+        run: pip-audit -r apps/worker/requirements.txt || true
+
+      - name: Run pip-audit on browser-worker deps
+        run: pip-audit -r apps/browser-worker/requirements.txt || true

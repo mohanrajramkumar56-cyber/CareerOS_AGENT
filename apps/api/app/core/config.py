@@ -28,7 +28,9 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     api_secret_key: str = "insecure-dev-key-CHANGE-IN-PROD"
-    api_allowed_origins: List[str] = ["http://localhost:3000"]
+    # Plain string — avoids pydantic-settings JSON pre-parsing.
+    # Use allowed_origins_list property wherever a list is needed.
+    api_allowed_origins: str = "http://localhost:3000"
 
     # ── Database ─────────────────────────────────────────────────
     database_url: str = "postgresql+asyncpg://careeros:careeros@localhost:5432/careeros"
@@ -73,10 +75,25 @@ class Settings(BaseSettings):
 
     @field_validator("api_allowed_origins", mode="before")
     @classmethod
-    def _parse_origins(cls, v: object) -> List[str]:
+    def _parse_origins(cls, v: object) -> str:
+        """Accept comma-string or JSON array, always store as comma-string."""
+        if isinstance(v, list):
+            return ",".join(str(i) for i in v)
         if isinstance(v, str):
-            return [o.strip() for o in v.split(",") if o.strip()]
-        return v  # type: ignore[return-value]
+            stripped = v.strip()
+            if stripped.startswith("["):
+                import json as _json
+                try:
+                    return ",".join(_json.loads(stripped))
+                except Exception:
+                    pass
+            return stripped
+        return "http://localhost:3000"
+
+    @property
+    def allowed_origins_list(self) -> List[str]:
+        """Origins as a list — use this in CORS middleware."""
+        return [o.strip() for o in self.api_allowed_origins.split(",") if o.strip()]
 
     @property
     def is_production(self) -> bool:

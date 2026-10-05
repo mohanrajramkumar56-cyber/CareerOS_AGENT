@@ -1,9 +1,19 @@
 version: "3.9"
 
-# Development overrides — hot reload, exposed ports, no prod builds
-# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# ── CareerOS Development Overrides ────────────────────────────────────────────
+# Hot-reload for all services. Mounts source directories as volumes.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Access (dev):
+#   http://localhost:3000 → Next.js dev server (direct, HMR)
+#   http://localhost:8000 → FastAPI (direct, reload)
+#   http://localhost      → via Nginx (same as prod)
 
 services:
+
+  # Expose DB + Redis in dev for local tooling (DBeaver, Redis Insight, etc.)
   postgres:
     ports:
       - "5432:5432"
@@ -12,42 +22,51 @@ services:
     ports:
       - "6379:6379"
 
+  # ── API: hot reload ──────────────────────────────────────────────────────────
   api:
     build:
       context: ./apps/api
       dockerfile: Dockerfile.dev
     volumes:
       - ./apps/api:/app
-      - ./packages:/packages
-      - ./storage:/app/storage
     environment:
       DEBUG: "true"
       LOG_LEVEL: DEBUG
+      ENVIRONMENT: development
+    # Override the entrypoint — dev doesn't need migration guard (run manually)
+    entrypoint: []
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
 
+  # ── Worker: hot reload ───────────────────────────────────────────────────────
   worker:
     build:
-      context: ./apps/worker
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: apps/worker/Dockerfile.dev
     volumes:
       - ./apps/worker:/app
-      - ./packages:/packages
-      - ./storage:/app/storage
+      - ./apps/api:/api:ro
     environment:
       DEBUG: "true"
-    command: python -m app.main
+      ENVIRONMENT: development
+    command: python -m arq app.main.WorkerSettings
 
+  # ── Browser Worker: hot reload ───────────────────────────────────────────────
   browser-worker:
     build:
-      context: ./apps/browser-worker
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: apps/browser-worker/Dockerfile.dev
     volumes:
       - ./apps/browser-worker:/app
-      - ./packages:/packages
-      - ./storage:/app/storage
+      - ./apps/api:/api:ro
     environment:
       DEBUG: "true"
+      ENVIRONMENT: development
+      BROWSER_TEST_MODE: "true"
+    command: python -m arq app.main.BrowserWorkerSettings
 
+  # ── Web: Next.js dev server with HMR ────────────────────────────────────────
   web:
     build:
       context: ./apps/web
@@ -59,3 +78,5 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
     command: npm run dev
+    ports:
+      - "3000:3000"

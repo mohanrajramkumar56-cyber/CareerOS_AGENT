@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:e2e": "cd ../.. && npm run test:e2e",
+    "test:e2e:ui": "cd ../.. && npm run test:e2e:ui"
   },
   "dependencies": {
     "react": "^18",

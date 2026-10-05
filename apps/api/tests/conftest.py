@@ -20,11 +20,21 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 @pytest_asyncio.fixture(scope="session")
 async def engine():
+    from sqlalchemy import event, text
+
     engine = create_async_engine(
         TEST_DATABASE_URL,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+
+    # Enable SQLite foreign key enforcement (off by default in SQLite)
+    @event.listens_for(engine.sync_engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine
@@ -46,6 +56,13 @@ async def client(db_session: AsyncSession):
 
     async def override_get_db():
         yield db_session
+
+    # Reset rate limiter storage between tests so limits don't bleed across tests.
+    from app.core.rate_limit import limiter
+    try:
+        limiter._storage.reset()
+    except Exception:
+        pass
 
     app.dependency_overrides[get_db] = override_get_db
     async with AsyncClient(

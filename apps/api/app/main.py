@@ -14,8 +14,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.core.rate_limit import limiter
 from app.db.session import close_engine, get_engine
 from app.api.v1.router import api_router
 
@@ -68,11 +73,21 @@ app = FastAPI(
 # ── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.api_allowed_origins,
+    allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+# ── Security headers (Phase 10) ──────────────────────────────────────────────
+from app.core.middleware import SecurityHeadersMiddleware, RequestSizeLimitMiddleware
+app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)
+app.add_middleware(RequestSizeLimitMiddleware)
 
 
 # ── Correlation ID + metrics middleware ──────────────────────────────────────

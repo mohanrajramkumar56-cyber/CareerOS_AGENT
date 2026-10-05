@@ -2,17 +2,17 @@
 CareerOS - Auth endpoints.
 Registration, login, token refresh, logout.
 """
-from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import uuid
 
+from app.core.rate_limit import limiter
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -59,7 +59,9 @@ async def get_current_user(
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)
+@limiter.limit("5/minute")
 async def register(
+    request: Request,
     payload: UserCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
@@ -85,7 +87,9 @@ async def register(
 
 
 @router.post("/token", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
